@@ -2,6 +2,7 @@
 __pycache__/
 *.py[codz]
 *$py.class
+*.pyc
 
 # C extensions
 *.so
@@ -54,6 +55,7 @@ cover/
 # Translations
 *.mo
 *.pot
+*.db
 
 # Django stuff:
 *.log
@@ -205,3 +207,10 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Backend uploads
+Backend/app/uploads/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
