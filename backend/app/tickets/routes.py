@@ -4,36 +4,48 @@ from sqlalchemy.orm import Session
 from app.schemas.ticket import TicketCreate, TicketUpdate, TicketOut
 from app.models.ticket import Ticket
 from app.models.project import Project
+from app.models.project_member import ProjectMember
+from app.models.user import User
 from app.core.deps import get_db, get_current_user
 from app.core.workflow import is_valid_transition
-from app.models.project_member import ProjectMember
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
 
 
+# -----------------------------
+# Helper: resolve project role
+# -----------------------------
+def get_project_role(db: Session, project_id: int, user_id: int) -> str | None:
+    member = (
+        db.query(ProjectMember)
+        .filter(
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == user_id,
+        )
+        .first()
+    )
+    return member.role if member else None
+
+
+# -----------------------------
+# Create ticket
+# -----------------------------
 @router.post("/", response_model=TicketOut)
 def create_ticket(
     ticket: TicketCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     project = db.query(Project).filter(Project.id == ticket.project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    member = (
-        db.query(ProjectMember)
-        .filter(
-            ProjectMember.project_id == ticket.project_id,
-            ProjectMember.user_id == current_user.id
-        )
-        .first()
-    )
+    role = get_project_role(db, ticket.project_id, current_user.id)
 
-    if not member or member.role == "viewer":
+    if role is None or role == "viewer":
         raise HTTPException(
             status_code=403,
-            detail="You do not have permission to create tickets in this project"
+            detail="You do not have permission to create tickets in this project",
         )
 
     new_ticket = Ticket(
@@ -42,7 +54,7 @@ def create_ticket(
         type=ticket.type,
         priority=ticket.priority,
         project_id=ticket.project_id,
-        assigned_to=ticket.assigned_to
+        assigned_to=ticket.assigned_to,
     )
 
     db.add(new_ticket)
@@ -51,54 +63,22 @@ def create_ticket(
     return new_ticket
 
 
+# -----------------------------
+# List tickets by project
+# -----------------------------
 @router.get("/project/{project_id}", response_model=list[TicketOut])
 def list_tickets_by_project(
     project_id: int,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
+    # NOTE: read access allowed to all project members
     return db.query(Ticket).filter(Ticket.project_id == project_id).all()
 
 
-@router.put("/{ticket_id}", response_model=TicketOut)
-def update_ticket(
-    ticket_id: int,
-    updates: TicketUpdate,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
-):
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-
-    project = db.query(Project).filter(Project.id == ticket.project_id).first()
-
-    # Permission check
-    if current_user.id != project.owner_id and current_user.id != ticket.assigned_to:
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized to update this ticket"
-        )
-
-    from app.core.workflow import is_valid_transition
-
-    update_data = updates.dict(exclude_unset=True)
-
-    if "status" in update_data:
-        if not is_valid_transition(ticket.status, update_data["status"]):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid status transition: {ticket.status} → {update_data['status']}"
-            )
-
-    for key, value in update_data.items():
-        setattr(ticket, key, value)
-
-    db.commit()
-    db.refresh(ticket)
-    return ticket
-
-
+# -----------------------------
+# Search tickets
+# -----------------------------
 @router.get("/search", response_model=list[TicketOut])
 def search_tickets(
     status: str | None = None,
@@ -107,7 +87,7 @@ def search_tickets(
     project_id: int | None = None,
     q: str | None = None,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     query = db.query(Ticket)
 
@@ -133,24 +113,84 @@ def search_tickets(
     return query.all()
 
 
+# -----------------------------
+# Delete ticket (ADMIN ONLY)
+# -----------------------------
 @router.delete("/{ticket_id}")
 def delete_ticket(
     ticket_id: int,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
 
-    project = db.query(Project).filter(Project.id == ticket.project_id).first()
+    role = get_project_role(db, ticket.project_id, current_user.id)
 
-    if current_user.id != project.owner_id:
+    if role != "admin":
         raise HTTPException(
             status_code=403,
-            detail="Only project owner can delete tickets"
+            detail="Only admins can delete tickets",
         )
 
     db.delete(ticket)
     db.commit()
     return {"message": "Ticket deleted successfully"}
+
+
+# -----------------------------
+# Update ticket (RBAC enforced)
+# -----------------------------
+@router.put("/{ticket_id}", response_model=TicketOut)
+def update_ticket(
+    ticket_id: int,
+    data: TicketUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    role = get_project_role(db, ticket.project_id, current_user.id)
+
+    if role is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Not a project member",
+        )
+
+    # 🔒 Viewer cannot edit anything
+    if role == "viewer":
+        raise HTTPException(
+            status_code=403,
+            detail="Viewers cannot edit tickets",
+        )
+
+    # 🔒 Developer: only assigned tickets
+    if role == "developer" and ticket.assigned_to != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Developers can only edit tickets assigned to them",
+        )
+
+    # 🔒 Admin-only reassignment
+    if data.assigned_to != ticket.assigned_to:
+        if role != "admin":
+            raise HTTPException(
+                status_code=403,
+                detail="Only admins can reassign tickets",
+            )
+
+    # --- perform update ---
+    ticket.title = data.title
+    ticket.description = data.description
+    ticket.status = data.status
+    ticket.priority = data.priority
+    ticket.assigned_to = data.assigned_to
+
+    db.commit()
+    db.refresh(ticket)
+
+    return ticket

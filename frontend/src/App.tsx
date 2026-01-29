@@ -1,28 +1,34 @@
-import { Routes, Route, Navigate } from "react-router-dom"
-import Login from "./pages/Login"
-import Dashboard from "./pages/Dashboard"
+import { BrowserRouter, Routes, Route } from "react-router-dom"
+import { AuthProvider } from "./auth/AuthContext"
 import ProtectedRoute from "./auth/ProtectedRoute"
-import AppLayout from "./layout/AppLayout"
+import Login from "./pages/Login"
+import Projects from "./pages/Projects"
+import Tickets from "./pages/Tickets"
 
-function App() {
+export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <Dashboard />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route path="*" element={<Navigate to="/" />} />
-    </Routes>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Projects />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects/:id"
+            element={
+              <ProtectedRoute>
+                <Tickets />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   )
 }
-
-export default App

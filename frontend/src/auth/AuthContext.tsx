@@ -1,5 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react"
-import { getToken, setToken as saveToken, clearToken } from "./token"
+import { createContext, useContext, useState } from "react"
 
 type AuthContextType = {
   isAuthenticated: boolean
@@ -11,15 +10,16 @@ const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(
-  !!getToken()
-)
+    !!localStorage.getItem("token")
+  )
+
   const login = (token: string) => {
-    saveToken(token)
+    localStorage.setItem("token", token)
     setIsAuthenticated(true)
   }
 
   const logout = () => {
-    clearToken()
+    localStorage.removeItem("token")
     setIsAuthenticated(false)
   }
 
@@ -32,8 +32,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext)
-  if (!ctx) {
-    throw new Error("useAuth must be used inside AuthProvider")
-  }
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider")
   return ctx
 }

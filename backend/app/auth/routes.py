@@ -45,5 +45,16 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     if not db_user or not verify_password(user.password, db_user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = create_access_token({"sub": db_user.email})
-    return {"access_token": token, "token_type": "bearer"}
+    # 🔥 IMPORTANT FIX:
+    # Include BOTH email and user_id in JWT payload
+    token = create_access_token(
+        {
+            "sub": db_user.email,
+            "user_id": db_user.id,
+        }
+    )
+
+    return {
+        "access_token": token,
+        "token_type": "bearer"
+    }

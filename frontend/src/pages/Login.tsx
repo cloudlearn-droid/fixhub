@@ -1,57 +1,60 @@
-import { useState } from "react"
-import { api } from "../api/client"
-import { useAuth } from "../auth/AuthContext"
-import { useNavigate } from "react-router-dom"
-
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { api } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 
 export default function Login() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [error, setError] = useState("")
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const navigate = useNavigate();
+  const { login } = useAuth();
 
-  const { login } = useAuth()
-  
-  const navigate = useNavigate()
-  
-  const handleLogin = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
     try {
-      const res = await api.post("/auth/login", { email, password })
-      login(res.data.access_token)
-      navigate("/")
-      } catch {
-      setError("Invalid credentials")
+      const res = await api.post("/auth/login", {
+        email,
+        password,
+      });
+
+      login(res.data.access_token);
+
+      // 🔑 THIS WAS MISSING
+      navigate("/", { replace: true });
+    } catch (err) {
+      alert("Invalid credentials");
     }
-  }
+  };
 
   return (
-    <div className="h-screen flex items-center justify-center bg-gray-100">
-      <div className="w-96 bg-white p-6 rounded shadow space-y-4">
-        <h1 className="text-2xl font-bold">FixHub Login</h1>
-
-        {error && <p className="text-red-600">{error}</p>}
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white p-6 rounded shadow w-80 space-y-4"
+      >
+        <h1 className="text-xl font-bold text-center">Login</h1>
 
         <input
-          className="w-full border p-2 rounded"
+          type="email"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          className="border p-2 w-full"
         />
 
         <input
-          className="w-full border p-2 rounded"
           type="password"
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          className="border p-2 w-full"
         />
 
-        <button
-          className="w-full bg-black text-white py-2 rounded"
-          onClick={handleLogin}
-        >
+        <button className="bg-black text-white w-full py-2 rounded">
           Login
         </button>
-      </div>
+      </form>
     </div>
-  )
+  );
 }

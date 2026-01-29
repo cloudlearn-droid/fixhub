@@ -4,7 +4,11 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_db, get_current_user
 from app.models.project import Project
 from app.models.project_member import ProjectMember
-from app.schemas.project_member import ProjectMemberAdd, ProjectMemberOut
+from app.models.user import User
+from app.schemas.project_member import (
+    ProjectMemberCreate,
+    ProjectMemberOut,
+)
 
 router = APIRouter(
     prefix="/projects/{project_id}/members", tags=["Project Members"])
@@ -13,7 +17,7 @@ router = APIRouter(
 @router.post("/", response_model=ProjectMemberOut)
 def add_project_member(
     project_id: int,
-    member: ProjectMemberAdd,
+    member: ProjectMemberCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
