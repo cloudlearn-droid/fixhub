@@ -72,8 +72,14 @@ def list_tickets_by_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # NOTE: read access allowed to all project members
-    return db.query(Ticket).filter(Ticket.project_id == project_id).all()
+    return (
+        db.query(Ticket)
+        .filter(
+            Ticket.project_id == project_id,
+            Ticket.is_deleted == False
+        )
+        .all()
+    )
 
 
 # -----------------------------
@@ -117,7 +123,7 @@ def search_tickets(
 # Delete ticket (ADMIN ONLY)
 # -----------------------------
 @router.delete("/{ticket_id}")
-def delete_ticket(
+def soft_delete_ticket(
     ticket_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -127,16 +133,13 @@ def delete_ticket(
         raise HTTPException(status_code=404, detail="Ticket not found")
 
     role = get_project_role(db, ticket.project_id, current_user.id)
-
     if role != "admin":
-        raise HTTPException(
-            status_code=403,
-            detail="Only admins can delete tickets",
-        )
+        raise HTTPException(status_code=403, detail="Admin only")
 
-    db.delete(ticket)
+    ticket.is_deleted = True
     db.commit()
-    return {"message": "Ticket deleted successfully"}
+
+    return {"message": "Ticket archived"}
 
 
 # -----------------------------
@@ -168,15 +171,19 @@ def update_ticket(
             detail="Viewers cannot edit tickets",
         )
 
-    # 🔒 Developer: only assigned tickets
-    if role == "developer" and ticket.assigned_to != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Developers can only edit tickets assigned to them",
-        )
+    # 🔒 Developer can edit ONLY assigned tickets
+    if role == "developer":
+        if ticket.assigned_to != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="Developers can only edit tickets assigned to them",
+            )
 
     # 🔒 Admin-only reassignment
-    if data.assigned_to != ticket.assigned_to:
+    if (
+        data.assigned_to is not None
+        and data.assigned_to != ticket.assigned_to
+    ):
         if role != "admin":
             raise HTTPException(
                 status_code=403,
@@ -184,11 +191,20 @@ def update_ticket(
             )
 
     # --- perform update ---
-    ticket.title = data.title
-    ticket.description = data.description
-    ticket.status = data.status
-    ticket.priority = data.priority
-    ticket.assigned_to = data.assigned_to
+    if data.title is not None:
+        ticket.title = data.title
+
+    if data.description is not None:
+        ticket.description = data.description
+
+    if data.status is not None:
+        ticket.status = data.status
+
+    if data.priority is not None:
+        ticket.priority = data.priority
+
+    if data.assigned_to != ticket.assigned_to:
+        ticket.assigned_to = data.assigned_to
 
     db.commit()
     db.refresh(ticket)

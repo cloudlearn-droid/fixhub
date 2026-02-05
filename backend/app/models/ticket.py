@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from app.database.db import Base
 
@@ -16,6 +16,8 @@ class Ticket(Base):
 
     project_id = Column(Integer, ForeignKey("projects.id"))
     assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    is_deleted = Column(Boolean, default=False)
 
     project = relationship("Project")
     assignee = relationship("User")

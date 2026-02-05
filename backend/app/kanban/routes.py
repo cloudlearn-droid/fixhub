@@ -17,7 +17,14 @@ def get_kanban_board(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    tickets = db.query(Ticket).filter(Ticket.project_id == project_id).all()
+    tickets = (
+        db.query(Ticket)
+        .filter(
+            Ticket.project_id == project_id,
+            Ticket.is_deleted == False
+        )
+        .all()
+    )
 
     return {
         "todo": [t for t in tickets if t.status == "todo"],

@@ -17,17 +17,18 @@ def project_dashboard(
 ):
     rows = (
         db.query(Ticket.status, func.count(Ticket.id))
-        .filter(Ticket.project_id == project_id)
+        .filter(
+            Ticket.project_id == project_id,
+            Ticket.is_deleted == False
+        )
         .group_by(Ticket.status)
         .all()
     )
 
-    summary = [
-        KanbanColumn(status=status, tickets=count)
-        for status, count in rows
-    ]
-
     return {
         "project_id": project_id,
-        "summary": summary
+        "summary": [
+            KanbanColumn(status=s, tickets=c)
+            for s, c in rows
+        ]
     }

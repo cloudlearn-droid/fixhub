@@ -9,7 +9,7 @@ class ProjectCreate(BaseModel):
 class ProjectOut(BaseModel):
     id: int
     name: str
-    description: str
+    description: str | None = None
 
     class Config:
         from_attributes = True
